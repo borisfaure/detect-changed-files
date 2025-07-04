@@ -1,46 +1,50 @@
-//! By convention, main.zig is where your main function lives in the case that
-//! you are building an executable. If you are making a library, the convention
-//! is to delete this file and start with root.zig instead.
+const std = @import("std");
+const assert = std.debug.assert;
+const Yaml = @import("yaml").Yaml;
+const io = std.io;
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer _ = gpa.deinit();
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+    if (args.len < 2) {
+        return error.NoPathArgument;
+    }
 
-    try bw.flush(); // Don't forget to flush!
-}
+    const stdout = std.io.getStdOut().writer();
 
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
+    const yml_location = args[1];
 
-test "use other module" {
-    try std.testing.expectEqual(@as(i32, 150), lib.add(100, 50));
-}
+    const yaml_path = try std.fs.cwd().realpathAlloc(
+        allocator,
+        yml_location,
+    );
+    defer allocator.free(yaml_path);
 
-test "fuzz example" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
+    const file = try std.fs.cwd().openFile(yaml_path, .{});
+    defer file.close();
+
+    const source = try file.readToEndAlloc(allocator, std.math.maxInt(u32));
+    defer allocator.free(source);
+
+    var yaml: Yaml = .{ .source = source };
+    defer yaml.deinit(allocator);
+
+    yaml.load(allocator) catch |err| switch (err) {
+        error.ParseFailure => {
+            assert(yaml.parse_errors.errorMessageCount() > 0);
+            yaml.parse_errors.renderToStdErr(.{ .ttyconf = std.io.tty.detectConfig(std.io.getStdErr()) });
+            return error.ParseFailure;
+        },
+        else => return err,
     };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
-}
 
-const std = @import("std");
+    try yaml.stringify(stdout);
+}
 
 /// This imports the separate module containing `root.zig`. Take a look in `build.zig` for details.
 const lib = @import("detect_changed_files_lib");
