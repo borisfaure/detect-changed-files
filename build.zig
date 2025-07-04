@@ -111,6 +111,9 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
 
+    // Add yaml dependency to the test module
+    exe_unit_tests.root_module.addImport("yaml", yaml.module("yaml"));
+
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 
     // Similar to creating the run step earlier, this exposes a `test` step to
