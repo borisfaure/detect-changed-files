@@ -6,6 +6,14 @@ const unicode_zig = @import("unicode.zig");
 const u8ToU21Comptime = unicode_zig.u8ToU21Comptime;
 const u8ToU21 = unicode_zig.u8ToU21;
 
+// PATTERN FORMAT
+//  - The slash "/" is used as the directory separator. Patterns must not
+//    start with a slash.
+//  - An asterisk "*" matches anything except a slash. The character "?"
+//    matches any one character except "/".
+//  - Two consecutive asterisks ("**") in patterns match against many
+//    successive path components
+
 pub const PathComponent = struct {
     str: []const u21,
 
@@ -70,6 +78,71 @@ pub const MatchPath = struct {
     pub fn destroy(self: *MatchPath, allocator: Allocator) void {
         self.deinit(allocator);
         allocator.destroy(self);
+    }
+
+    // Check if the path matches the given text
+    // self is the pattern, text is the string to match against
+    pub fn isMatch(self: MatchPath, allocator: Allocator, text: *const MatchPath) bool {
+
+        // If the pattern has no components, it matches only if text is empty
+        if (self.components.len == 0) return text.components.len == 0;
+
+        // index in self.components
+        var pattern_idx: usize = 0;
+        // index in text.components
+        var text_idx: usize = 0;
+
+        var is_double_star: bool = false;
+        // Iterate through both components
+        while (pattern_idx < self.components.len and text_idx < text.components.len) {
+            const pattern_comp = self.components[pattern_idx];
+            const text_comp = text.components[text_idx];
+
+            // If the pattern component is a double star, it matches anything
+            if (pattern_comp.isDoubleStar()) {
+                is_double_star = true;
+                if (pattern_idx + 1 == self.components.len) {
+                    // If this is the last pattern component, it matches everything
+                    return true;
+                }
+                pattern_idx += 1; // Move to the next pattern component
+                text_idx += 1; // Move to the next text component
+                continue;
+            }
+
+            if (matchPatternComponent(
+                allocator,
+                pattern_comp.str,
+                text_comp.str,
+            ) catch |err| {
+                std.debug.print("Error matching pattern component: {}\n", .{err});
+                return false;
+            } == false) {
+                // If the current components do not match, check if we had a double star
+                if (is_double_star) {
+                    // If we had a double star, we can skip this text component
+                    text_idx += 1;
+                    continue;
+                }
+                // Otherwise, the match fails
+                return false;
+            } else {
+                // There is a match!
+                // Reset double star flag
+                is_double_star = false;
+
+                // Move to the next components in both
+                pattern_idx += 1;
+                text_idx += 1;
+                continue;
+            }
+        }
+        if ((pattern_idx < self.components.len) or (text_idx < text.components.len)) {
+            // If we still have pattern or text components left, it means we didn't match all components
+            return false;
+        }
+        // If we reached here, all components matched
+        return true;
     }
 };
 
@@ -218,4 +291,122 @@ test "Split path components" {
     }
 
     try std.testing.expectEqual(components.len, 5);
+}
+
+test "MatchPath: pattern == text" {
+    const allocator = std.testing.allocator;
+
+    const pattern = try MatchPath.initU8(allocator, "ab/cd/ef.zig");
+    defer pattern.deinit(allocator);
+
+    const text = try MatchPath.initU8(allocator, "ab/cd/ef.zig");
+    defer text.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &text));
+
+    const nope = try MatchPath.initU8(allocator, "ab/cd/ef.ghi");
+    defer nope.deinit(allocator);
+    try std.testing.expect(!pattern.isMatch(allocator, &nope));
+}
+
+test "MatchPath: leading **" {
+    const allocator = std.testing.allocator;
+
+    const pattern = try MatchPath.initU8(allocator, "**/ef.zig");
+    defer pattern.deinit(allocator);
+
+    const single = try MatchPath.initU8(allocator, "foo/ef.zig");
+    defer single.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &single));
+
+    const multiple = try MatchPath.initU8(allocator, "ab/cd/ef.zig");
+    defer multiple.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &multiple));
+
+    const nope = try MatchPath.initU8(allocator, "ef.zig");
+    defer nope.deinit(allocator);
+    try std.testing.expect(!pattern.isMatch(allocator, &nope));
+}
+
+test "MatchPath: trailing **" {
+    const allocator = std.testing.allocator;
+
+    const pattern = try MatchPath.initU8(allocator, "ab/cd/**");
+    defer pattern.deinit(allocator);
+
+    const single = try MatchPath.initU8(allocator, "ab/cd/ef.zig");
+    defer single.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &single));
+
+    const multiple = try MatchPath.initU8(allocator, "ab/cd/ef/gh.zig");
+    defer multiple.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &multiple));
+
+    const nope = try MatchPath.initU8(allocator, "ab/cd");
+    defer nope.deinit(allocator);
+    try std.testing.expect(!pattern.isMatch(allocator, &nope));
+}
+
+test "MatchPath: ** in the middle" {
+    const allocator = std.testing.allocator;
+
+    const pattern = try MatchPath.initU8(allocator, "ab/**/cd/ef.zig");
+    defer pattern.deinit(allocator);
+
+    const single = try MatchPath.initU8(allocator, "ab/foo/cd/ef.zig");
+    defer single.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &single));
+
+    const multiple = try MatchPath.initU8(allocator, "ab/foo/bar/cd/ef.zig");
+    defer multiple.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &multiple));
+
+    const nope = try MatchPath.initU8(allocator, "ab/cd/ef.zig");
+    defer nope.deinit(allocator);
+    try std.testing.expect(!pattern.isMatch(allocator, &nope));
+}
+
+test "MatchPath: complex pattern with ** and ?" {
+    const allocator = std.testing.allocator;
+
+    const pattern = try MatchPath.initU8(allocator, "ab/cd/**/e?f/gh.zig");
+    defer pattern.deinit(allocator);
+
+    const single = try MatchPath.initU8(allocator, "ab/cd/foo/e3f/gh.zig");
+    defer single.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &single));
+
+    const nope = try MatchPath.initU8(allocator, "ab/cd/foo/e33f/gh.zig");
+    defer nope.deinit(allocator);
+    try std.testing.expect(!pattern.isMatch(allocator, &nope));
+}
+
+test "MatchPath: double **" {
+    const allocator = std.testing.allocator;
+
+    const pattern = try MatchPath.initU8(allocator, "ab/**/cd/**/ef.zig");
+    defer pattern.deinit(allocator);
+
+    const single = try MatchPath.initU8(allocator, "ab/foo/cd/bar/ef.zig");
+    defer single.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &single));
+
+    const multiple = try MatchPath.initU8(allocator, "ab/foo/cd/bar/baz/ef.zig");
+    defer multiple.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &multiple));
+
+    const nope = try MatchPath.initU8(allocator, "ab/cd/ef.zig");
+    defer nope.deinit(allocator);
+    try std.testing.expect(!pattern.isMatch(allocator, &nope));
+}
+
+test "MatchPath: with utf-8 strings" {
+    const allocator = std.testing.allocator;
+
+    // Test with UTF-8 strings
+    const pattern = try MatchPath.initU8(allocator, "ab/**/e⚡f/g?h/ij.zig");
+    defer pattern.deinit(allocator);
+
+    const text = try MatchPath.initU8(allocator, "ab/⚡/e⚡f/g⚡h/ij.zig");
+    defer text.deinit(allocator);
+    try std.testing.expect(pattern.isMatch(allocator, &text));
 }
