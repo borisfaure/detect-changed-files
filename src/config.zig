@@ -1,14 +1,15 @@
 const std = @import("std");
 const Yaml = @import("yaml").Yaml;
+const Unicode = @import("unicode.zig");
 
 /// Represents the structure of changed-files.yaml
 /// Each key maps to a list of file patterns
 pub const ChangedFilesConfig = struct {
-    map: std.StringHashMap([]const []const u8),
+    map: std.StringHashMap([]const []const u21),
 
     pub fn init(allocator: std.mem.Allocator) ChangedFilesConfig {
         return ChangedFilesConfig{
-            .map = std.StringHashMap([]const []const u8).init(allocator),
+            .map = std.StringHashMap([]const []const u21).init(allocator),
         };
     }
 
@@ -25,16 +26,16 @@ pub const ChangedFilesConfig = struct {
         allocator.destroy(self);
     }
 
-    pub fn put(self: *ChangedFilesConfig, key: []const u8, value: []const []const u8) !void {
+    pub fn put(self: *ChangedFilesConfig, key: []const u8, value: []const []const u21) !void {
         try self.map.put(key, value);
     }
-    pub fn get(self: *ChangedFilesConfig, key: []const u8) ?[]const []const u8 {
+    pub fn get(self: *ChangedFilesConfig, key: []const u8) ?[]const []const u21 {
         return self.map.get(key);
     }
     pub fn count(self: *ChangedFilesConfig) usize {
         return self.map.count();
     }
-    pub fn iterator(self: *ChangedFilesConfig) std.StringHashMap([]const []const u8).Iterator {
+    pub fn iterator(self: *ChangedFilesConfig) std.StringHashMap([]const []const u21).Iterator {
         return self.map.iterator();
     }
 
@@ -65,11 +66,11 @@ pub const ChangedFilesConfig = struct {
             const value = entry.value_ptr.*;
             if (value != .list) return error.TypeMismatch;
             const list = value.list;
-            var patterns = try allocator.alloc([]const u8, list.len);
+            var patterns = try allocator.alloc([]const u21, list.len);
             for (list, 0..) |item, i| {
                 if (item != .string) return error.TypeMismatch;
                 // duplicate the string to ensure it is owned by the allocator
-                patterns[i] = try allocator.dupe(u8, item.string);
+                patterns[i] = try Unicode.u8ToU21(allocator, item.string);
             }
             // duplicate the key to ensure it is owned by the allocator
             const duped_key = try allocator.dupe(u8, key);
