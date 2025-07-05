@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 const io = std.io;
 const Yaml = @import("yaml").Yaml;
 const Config = @import("config.zig").ChangedFilesConfig;
+const match = @import("match.zig");
 
 pub const std_options = std.Options{
     // Set the log level to info
