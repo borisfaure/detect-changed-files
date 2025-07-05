@@ -2,7 +2,102 @@
 // Do pattern matching on strings
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const u8ToU21Comptime = @import("unicode.zig").u8ToU21Comptime;
+const unicode_zig = @import("unicode.zig");
+const u8ToU21Comptime = unicode_zig.u8ToU21Comptime;
+const u8ToU21 = unicode_zig.u8ToU21;
+
+pub const PathComponent = struct {
+    str: []const u21,
+
+    fn isDoubleStar(self: PathComponent) bool {
+        return self.str.len == 2 and self.str[0] == '*' and self.str[1] == '*';
+    }
+
+    pub fn init(allocator: Allocator, str: []const u21) !PathComponent {
+        return PathComponent{
+            .str = try allocator.dupe(u21, str),
+        };
+    }
+    pub fn createInit(allocator: Allocator, str: []const u8) !*PathComponent {
+        const self = try allocator.create(PathComponent);
+        self.* = PathComponent.init(allocator, try u8ToU21(allocator, str)) catch |err| {
+            allocator.destroy(self);
+            return err;
+        };
+        return self;
+    }
+
+    pub fn deinit(self: PathComponent, allocator: Allocator) void {
+        allocator.free(self.str);
+    }
+    pub fn destroy(self: *PathComponent, allocator: Allocator) void {
+        self.deinit(allocator);
+        allocator.destroy(self);
+    }
+};
+
+pub const MatchPath = struct {
+    components: []PathComponent,
+
+    pub fn init(allocator: Allocator, path: []const u21) !MatchPath {
+        const components = try splitPathComponents(allocator, path);
+        return MatchPath{
+            .components = components,
+        };
+    }
+
+    pub fn initU8(allocator: Allocator, path: []const u8) !MatchPath {
+        const path_u21 = try u8ToU21(allocator, path);
+        defer allocator.free(path_u21);
+        return MatchPath.init(allocator, path_u21);
+    }
+
+    pub fn createInitU8(allocator: Allocator, path: []const u8) !*MatchPath {
+        const self = try allocator.create(MatchPath);
+        self.* = MatchPath.initU8(allocator, path) catch |err| {
+            allocator.destroy(self);
+            return err;
+        };
+        return self;
+    }
+
+    pub fn deinit(self: MatchPath, allocator: Allocator) void {
+        for (self.components) |*comp| {
+            comp.deinit(allocator);
+        }
+        allocator.free(self.components);
+    }
+    pub fn destroy(self: *MatchPath, allocator: Allocator) void {
+        self.deinit(allocator);
+        allocator.destroy(self);
+    }
+};
+
+// Split a string into path components
+fn splitPathComponents(allocator: Allocator, path: []const u21) ![]PathComponent {
+    var components = std.ArrayList(PathComponent).init(allocator);
+    defer components.deinit();
+
+    var start: usize = 0;
+    var i: usize = 0;
+    for (path) |c| {
+        if (c == '/') {
+            if (i > start) {
+                const comp = try PathComponent.init(allocator, path[start..i]);
+                try components.append(comp);
+            }
+            start = i + 1; // skip the '/'
+        }
+        i += 1;
+    }
+    // Add last component if not empty
+    if (start < path.len) {
+        const comp = try PathComponent.init(allocator, path[start..]);
+        try components.append(comp);
+    }
+
+    return components.toOwnedSlice();
+}
 
 fn matchPatternComponent(allocator: Allocator, pattern: []const u21, text: []const u21) !bool {
     // Create memoization table
@@ -109,4 +204,18 @@ test "Component: complex patterns" {
     try std.testing.expect(!try testMatchPatternComponent("a*b?c", "a123b")); // missing 'c'
     try std.testing.expect(try testMatchPatternComponent("a*b?c*", "a123b4c56"));
     try std.testing.expect(!try testMatchPatternComponent("a*b?c*", "a123b456d789")); // wrong character
+}
+
+test "Split path components" {
+    const allocator = std.testing.allocator;
+    const path = comptime u8ToU21Comptime("ab/cd/ef/gh/ij");
+    const components = try splitPathComponents(allocator, path);
+    defer {
+        for (components) |*comp| {
+            comp.deinit(allocator);
+        }
+        allocator.free(components);
+    }
+
+    try std.testing.expectEqual(components.len, 5);
 }

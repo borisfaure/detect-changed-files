@@ -1,64 +1,63 @@
 const std = @import("std");
 const Yaml = @import("yaml").Yaml;
 const Unicode = @import("unicode.zig");
+const match = @import("match.zig");
+const PathComponent = match.PathComponent;
+const MatchPath = match.MatchPath;
 
 /// Represents the structure of changed-files.yaml
 /// Each key maps to a list of file patterns
 pub const ChangedFilesConfig = struct {
-    map: std.StringHashMap([]const []const u21),
+    map: std.StringHashMap([]const MatchPath),
 
     pub fn init(allocator: std.mem.Allocator) ChangedFilesConfig {
         return ChangedFilesConfig{
-            .map = std.StringHashMap([]const []const u21).init(allocator),
+            .map = std.StringHashMap([]const MatchPath).init(allocator),
         };
     }
 
     pub fn deinit(self: *ChangedFilesConfig, allocator: std.mem.Allocator) void {
         var it = self.map.iterator();
         while (it.next()) |entry| {
-            allocator.free(entry.key_ptr.*);
             for (entry.value_ptr.*) |pattern| {
-                allocator.free(pattern);
+                MatchPath.deinit(pattern, allocator);
             }
+            allocator.free(entry.key_ptr.*);
             allocator.free(entry.value_ptr.*);
         }
         self.map.deinit();
-        allocator.destroy(self);
     }
 
-    pub fn put(self: *ChangedFilesConfig, key: []const u8, value: []const []const u21) !void {
+    pub fn put(self: *ChangedFilesConfig, key: []const u8, value: []const MatchPath) !void {
         try self.map.put(key, value);
     }
-    pub fn get(self: *ChangedFilesConfig, key: []const u8) ?[]const []const u21 {
+    pub fn get(self: *ChangedFilesConfig, key: []const u8) ?[]const MatchPath {
         return self.map.get(key);
     }
-    pub fn count(self: *ChangedFilesConfig) usize {
+    pub fn count(self: ChangedFilesConfig) usize {
         return self.map.count();
     }
-    pub fn iterator(self: *ChangedFilesConfig) std.StringHashMap([]const []const u21).Iterator {
+    pub fn iterator(self: *ChangedFilesConfig) std.StringHashMap([]const MatchPath).Iterator {
         return self.map.iterator();
     }
 
     pub fn fromSlice(
         allocator: std.mem.Allocator,
         slice: []const u8,
-    ) !*ChangedFilesConfig {
+    ) !ChangedFilesConfig {
         var yaml: Yaml = .{ .source = slice };
         defer yaml.deinit(allocator);
 
         try yaml.load(allocator);
         if (yaml.docs.items.len == 0) {
             // treat empty as empty config
-            const result = try allocator.create(ChangedFilesConfig);
-            result.* = ChangedFilesConfig.init(allocator);
-            return result;
+            return ChangedFilesConfig.init(allocator);
         }
         const root = yaml.docs.items[0];
         if (root != .map) return error.TypeMismatch;
         const map = root.map;
 
-        const result = try allocator.create(ChangedFilesConfig);
-        result.* = ChangedFilesConfig.init(allocator);
+        var result = ChangedFilesConfig.init(allocator);
 
         var it = map.iterator();
         while (it.next()) |entry| {
@@ -66,15 +65,15 @@ pub const ChangedFilesConfig = struct {
             const value = entry.value_ptr.*;
             if (value != .list) return error.TypeMismatch;
             const list = value.list;
-            var patterns = try allocator.alloc([]const u21, list.len);
+            var patterns = try allocator.alloc(MatchPath, list.len);
             for (list, 0..) |item, i| {
                 if (item != .string) return error.TypeMismatch;
                 // duplicate the string to ensure it is owned by the allocator
-                patterns[i] = try Unicode.u8ToU21(allocator, item.string);
+                patterns[i] = try MatchPath.initU8(allocator, item.string);
             }
             // duplicate the key to ensure it is owned by the allocator
             const duped_key = try allocator.dupe(u8, key);
-            try result.put(duped_key, patterns);
+            try (&result).put(duped_key, patterns);
         }
         return result;
     }
@@ -82,7 +81,7 @@ pub const ChangedFilesConfig = struct {
     pub fn fromFileLocation(
         allocator: std.mem.Allocator,
         yaml_location: []const u8,
-    ) !*ChangedFilesConfig {
+    ) !ChangedFilesConfig {
         const yaml_path = try std.fs.cwd().realpathAlloc(allocator, yaml_location);
         defer allocator.free(yaml_path);
 

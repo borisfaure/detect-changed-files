@@ -51,8 +51,8 @@ pub fn main() !void {
     }
 
     const yml_location = args[1];
-    const config = try Config.fromFileLocation(allocator, yml_location);
-    defer config.*.deinit(allocator);
+    var config = try Config.fromFileLocation(allocator, yml_location);
+    defer config.deinit(allocator);
 
     // print number of elements in changes
     std.debug.print("Number of elements in changes: {}\n", .{config.count()});
