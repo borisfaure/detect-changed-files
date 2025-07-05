@@ -63,6 +63,3 @@ pub fn main() !void {
         std.debug.print("Key: {s}\n", .{entry.key_ptr.*});
     }
 }
-
-/// This imports the separate module containing `root.zig`. Take a look in `build.zig` for details.
-const lib = @import("detect_changed_files_lib");
