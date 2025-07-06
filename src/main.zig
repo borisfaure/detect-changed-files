@@ -65,10 +65,15 @@ pub fn main() !void {
     };
     defer groups.deinit();
 
-    var it = groups.groups.iterator();
-    while (it.next()) |entry| {
-        const key = entry.key_ptr.*;
-        const matched = entry.value_ptr.*;
-        std.debug.print("Group: {s}, Matched: {}\n", .{ key, matched });
-    }
+    const json_options = std.json.StringifyOptions{ .whitespace = .indent_2 };
+
+    // Convert groups to JSON object for serialization
+    var json_obj = try groups.toJsonObject();
+    defer json_obj.deinit();
+
+    // Create a JSON Value from the object map
+    const json_value = std.json.Value{ .object = json_obj };
+
+    const output_writer = std.io.getStdOut().writer();
+    try std.json.stringify(json_value, json_options, output_writer);
 }

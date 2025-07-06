@@ -159,6 +159,26 @@ pub const GroupsMatched = struct {
     pub fn put(self: *GroupsMatched, key: []const u8, value: bool) !void {
         try self.groups.put(key, value);
     }
+
+    // Convert the groups to a JSON object for serialization
+    pub fn toJsonObject(self: *GroupsMatched) !std.json.ObjectMap {
+        var json_obj = std.json.ObjectMap.init(self.allocator);
+        errdefer json_obj.deinit();
+
+        var it = self.groups.iterator();
+        while (it.next()) |entry| {
+            const key = entry.key_ptr.*;
+            const value = entry.value_ptr.*;
+
+            // Create a JSON value for the boolean
+            const json_value = std.json.Value{ .bool = value };
+
+            // Add to the JSON object
+            try json_obj.put(key, json_value);
+        }
+
+        return json_obj;
+    }
 };
 
 test "parseChangedFilesConfig - basic functionality" {
