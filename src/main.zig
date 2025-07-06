@@ -2,8 +2,10 @@ const std = @import("std");
 const assert = std.debug.assert;
 const io = std.io;
 const Yaml = @import("yaml").Yaml;
-const Config = @import("config.zig").ChangedFilesConfig;
+const config_zig = @import("config.zig");
+const Config = config_zig.ChangedFilesConfig;
 const match = @import("match.zig");
+const DiffFiles = @import("diff.zig").DiffFiles;
 
 pub const std_options = std.Options{
     // Set the log level to info
@@ -54,12 +56,19 @@ pub fn main() !void {
     var config = try Config.fromFileLocation(allocator, yml_location);
     defer config.deinit(allocator);
 
-    // print number of elements in changes
-    std.debug.print("Number of elements in changes: {}\n", .{config.count()});
+    var diff_files = try DiffFiles.fromStdIn(allocator);
+    defer diff_files.deinit(allocator);
 
-    // print all keys in changes
-    var it = config.iterator();
+    var groups = config.checkPatterns(allocator, diff_files) catch |err| {
+        std.debug.print("Error checking patterns: {}\n", .{err});
+        return err;
+    };
+    defer groups.deinit();
+
+    var it = groups.groups.iterator();
     while (it.next()) |entry| {
-        std.debug.print("Key: {s}\n", .{entry.key_ptr.*});
+        const key = entry.key_ptr.*;
+        const matched = entry.value_ptr.*;
+        std.debug.print("Group: {s}, Matched: {}\n", .{ key, matched });
     }
 }
