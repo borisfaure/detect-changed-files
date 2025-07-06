@@ -37,10 +37,6 @@ pub const ChangedFilesConfig = struct {
     pub fn count(self: ChangedFilesConfig) usize {
         return self.map.count();
     }
-    pub fn iterator(self: *ChangedFilesConfig) std.StringHashMap([]const MatchPath).Iterator {
-        return self.map.iterator();
-    }
-
     pub fn fromSlice(
         allocator: std.mem.Allocator,
         slice: []const u8,
@@ -104,24 +100,24 @@ test "parseChangedFilesConfig - basic functionality" {
         \\  - pattern5
     ;
 
-    const config = ChangedFilesConfig.fromSlice(std.testing.allocator, test_yaml) catch |err| {
+    var config = ChangedFilesConfig.fromSlice(std.testing.allocator, test_yaml) catch |err| {
         std.debug.print("basic functionality parse error: {}\n", .{err});
         return err;
     };
-    defer config.*.deinit(std.testing.allocator);
+    defer config.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 2), config.*.count());
+    try std.testing.expectEqual(@as(usize, 2), config.map.count());
 
     // Test key1
-    const key1_patterns = config.*.get("key1").?;
+    const key1_patterns = config.get("key1").?;
     try std.testing.expectEqual(@as(usize, 2), key1_patterns.len);
-    try std.testing.expectEqualStrings("pattern1", key1_patterns[0]);
-    try std.testing.expectEqualStrings("pattern2", key1_patterns[1]);
+    try std.testing.expectEqualSlices(u21, comptime Unicode.u8ToU21Comptime("pattern1"), key1_patterns[0].components[0].str);
+    try std.testing.expectEqualSlices(u21, comptime Unicode.u8ToU21Comptime("pattern2"), key1_patterns[1].components[0].str);
 
     // Test key2
-    const key2_patterns = config.*.get("key2").?;
+    const key2_patterns = config.get("key2").?;
     try std.testing.expectEqual(@as(usize, 3), key2_patterns.len);
-    try std.testing.expectEqualStrings("pattern3", key2_patterns[0]);
-    try std.testing.expectEqualStrings("pattern4", key2_patterns[1]);
-    try std.testing.expectEqualStrings("pattern5", key2_patterns[2]);
+    try std.testing.expectEqualSlices(u21, comptime Unicode.u8ToU21Comptime("pattern3"), key2_patterns[0].components[0].str);
+    try std.testing.expectEqualSlices(u21, comptime Unicode.u8ToU21Comptime("pattern4"), key2_patterns[1].components[0].str);
+    try std.testing.expectEqualSlices(u21, comptime Unicode.u8ToU21Comptime("pattern5"), key2_patterns[2].components[0].str);
 }
