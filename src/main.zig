@@ -40,6 +40,55 @@ pub fn myLogFn(
     nosuspend stderr.print(prefix ++ format ++ "\n", args) catch return;
 }
 
+fn printHelp() void {
+    const help_text =
+        \\detect-changed-files - Analyze changed files and categorize them based on patterns
+        \\
+        \\USAGE:
+        \\    detect_changed_files [OPTIONS] <config.yaml>
+        \\
+        \\ARGS:
+        \\    <config.yaml>    Path to the YAML configuration file
+        \\
+        \\OPTIONS:
+        \\    -h, --help       Print this help message
+        \\
+        \\DESCRIPTION:
+        \\    This tool reads changed file paths from stdin (typically the output of
+        \\    'git diff --name-only') and categorizes them based on patterns defined
+        \\    in the YAML configuration file.
+        \\
+        \\    The tool outputs JSON to stdout with boolean values indicating which
+        \\    groups have matching files.
+        \\
+        \\EXAMPLES:
+        \\    # Basic usage
+        \\    git diff --name-only | detect_changed_files config.yaml
+        \\
+        \\    # Check staged changes
+        \\    git diff --name-only --cached | detect_changed_files config.yaml
+        \\
+        \\    # Check changes between commits
+        \\    git diff --name-only HEAD~1 HEAD | detect_changed_files config.yaml
+        \\
+        \\CONFIGURATION:
+        \\    The configuration file is a YAML file where each key represents a group
+        \\    name, and the value is a list of file patterns. Patterns use glob-style
+        \\    syntax:
+        \\
+        \\    - * matches any sequence of characters except /
+        \\    - ? matches any single character except /
+        \\    - ** matches zero or more path components (directories)
+        \\
+        \\OUTPUT:
+        \\    JSON object with group names as keys and boolean values indicating
+        \\    whether any files matched that group's patterns.
+        \\
+    ;
+    const stderr = std.io.getStdErr().writer();
+    stderr.print(help_text, .{}) catch {};
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -48,8 +97,24 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    if (args.len < 2) {
+    // Check for help flags
+    if (args.len == 2) {
+        const first_arg = args[1];
+        if (std.mem.eql(u8, first_arg, "-h") or std.mem.eql(u8, first_arg, "--help")) {
+            printHelp();
+            return;
+        }
+    } else if (args.len < 2) {
+        const stderr = std.io.getStdErr().writer();
+        stderr.print("Error: No configuration file specified\n", .{}) catch {};
+        stderr.print("Use -h or --help for usage information\n", .{}) catch {};
         return error.NoPathArgument;
+    } else {
+        // Too many arguments
+        const stderr = std.io.getStdErr().writer();
+        stderr.print("Error: Too many arguments\n", .{}) catch {};
+        stderr.print("Use -h or --help for usage information\n", .{}) catch {};
+        return error.TooManyArguments;
     }
 
     const yml_location = args[1];
