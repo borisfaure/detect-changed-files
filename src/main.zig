@@ -54,10 +54,10 @@ pub fn main() !void {
 
     const yml_location = args[1];
     var config = try Config.fromFileLocation(allocator, yml_location);
-    defer config.deinit(allocator);
+    defer config.deinit();
 
     var diff_files = try DiffFiles.fromStdIn(allocator);
-    defer diff_files.deinit(allocator);
+    defer diff_files.deinit();
 
     var groups = config.checkPatterns(allocator, diff_files) catch |err| {
         std.debug.print("Error checking patterns: {}\n", .{err});

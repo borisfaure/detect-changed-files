@@ -10,21 +10,23 @@ const DiffFiles = @import("diff.zig").DiffFiles;
 /// Each key maps to a list of file patterns
 pub const ChangedFilesConfig = struct {
     map: std.StringHashMap([]const MatchPath),
+    allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) ChangedFilesConfig {
         return ChangedFilesConfig{
             .map = std.StringHashMap([]const MatchPath).init(allocator),
+            .allocator = allocator,
         };
     }
 
-    pub fn deinit(self: *ChangedFilesConfig, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *ChangedFilesConfig) void {
         var it = self.map.iterator();
         while (it.next()) |entry| {
             for (entry.value_ptr.*) |pattern| {
-                MatchPath.deinit(pattern, allocator);
+                pattern.deinit();
             }
-            allocator.free(entry.key_ptr.*);
-            allocator.free(entry.value_ptr.*);
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
         }
         self.map.deinit();
     }
@@ -174,7 +176,7 @@ test "parseChangedFilesConfig - basic functionality" {
         std.debug.print("basic functionality parse error: {}\n", .{err});
         return err;
     };
-    defer config.deinit(std.testing.allocator);
+    defer config.deinit();
 
     try std.testing.expectEqual(@as(usize, 2), config.map.count());
 
@@ -210,23 +212,23 @@ test "checkPatterns - basic functionality" {
         std.debug.print("checkPatterns parse error: {}\n", .{err});
         return err;
     };
-    defer config.deinit(allocator);
+    defer config.deinit();
 
-    var diff_files = DiffFiles.init();
-    defer diff_files.deinit(std.testing.allocator);
+    var diff_files = DiffFiles.init(allocator);
+    defer diff_files.deinit();
 
     // Simulate a diff with only a file that match key1 and key2, and 2 files
     // that do not match
-    var lines = std.ArrayList(*MatchPath).init(allocator);
+    var lines = std.ArrayList(MatchPath).init(allocator);
     defer lines.deinit();
     try lines.append(
-        try MatchPath.createInitU8(allocator, "foo/bar"),
+        try MatchPath.initU8(allocator, "foo/bar"),
     );
     try lines.append(
-        try MatchPath.createInitU8(allocator, "a/b/c.zig"),
+        try MatchPath.initU8(allocator, "a/b/c.zig"),
     );
     try lines.append(
-        try MatchPath.createInitU8(allocator, "build.zig.zon"),
+        try MatchPath.initU8(allocator, "build.zig.zon"),
     );
     diff_files.list = try lines.toOwnedSlice();
 

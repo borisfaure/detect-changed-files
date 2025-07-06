@@ -5,19 +5,21 @@ const std = @import("std");
 const MatchPath = @import("match.zig").MatchPath;
 
 pub const DiffFiles = struct {
-    list: []const *MatchPath,
+    list: []const MatchPath,
+    allocator: std.mem.Allocator,
 
-    pub fn init() DiffFiles {
+    pub fn init(allocator: std.mem.Allocator) DiffFiles {
         return DiffFiles{
             .list = &.{},
+            .allocator = allocator,
         };
     }
 
-    pub fn deinit(self: *DiffFiles, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: DiffFiles) void {
         for (self.list) |item| {
-            MatchPath.destroy(item, allocator);
+            item.deinit();
         }
-        allocator.free(self.list);
+        self.allocator.free(self.list);
     }
 
     pub fn fromStdIn(
@@ -29,7 +31,7 @@ pub const DiffFiles = struct {
         // Get the Reader interface from BufferedReader
         var r = buf.reader();
 
-        var lines = std.ArrayList(*MatchPath).init(allocator);
+        var lines = std.ArrayList(MatchPath).init(allocator);
         defer lines.deinit();
 
         // Read until a newline or EOF
@@ -39,19 +41,20 @@ pub const DiffFiles = struct {
             if (trimmed.len == 0) continue; // Skip empty lines
 
             // Allocate a new MatchPath for each line read
-            var match_path = try MatchPath.createInitU8(
+            var match_path = try MatchPath.initU8(
                 allocator,
                 trimmed,
             );
             lines.append(match_path) catch |err| {
                 // If we fail to append, deinit the match_path
-                match_path.deinit(allocator);
+                match_path.deinit();
                 return err;
             };
         }
 
         return DiffFiles{
             .list = try lines.toOwnedSlice(),
+            .allocator = allocator,
         };
     }
 };
