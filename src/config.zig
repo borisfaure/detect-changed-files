@@ -218,14 +218,18 @@ test "checkPatterns - basic functionality" {
     const allocator = std.testing.allocator;
     const test_yaml =
         \\key1:
-        \\  - 'a/**/c.zig'
-        \\  - 'd/?/f.zig'
+        \\  - '/a/**/c.zig'
+        \\  - '/d/?/f.zig'
         \\key2:
-        \\  - '**/*.c'
-        \\  - '**/*.zig'
-        \\  - '**/*.h'
+        \\  - '*.c'
+        \\  - '*.zig'
+        \\  - '*.h'
         \\key3:
-        \\  - '**/*.rs'
+        \\  - '*.rs'
+        \\key4:
+        \\  - '/a/b/'
+        \\key5:
+        \\  - 'b/'
     ;
 
     var config = ChangedFilesConfig.fromSlice(allocator, test_yaml) catch |err| {
@@ -259,4 +263,6 @@ test "checkPatterns - basic functionality" {
     try std.testing.expect(groups.get("key1").?);
     try std.testing.expect(groups.get("key2").?);
     try std.testing.expect(!groups.get("key3").?);
+    try std.testing.expect(groups.get("key4").?);
+    try std.testing.expect(groups.get("key5").?);
 }

@@ -7,12 +7,16 @@ const u8ToU21Comptime = unicode_zig.u8ToU21Comptime;
 const u8ToU21 = unicode_zig.u8ToU21;
 
 // PATTERN FORMAT
-//  - The slash "/" is used as the directory separator. Patterns must not
-//    start with a slash.
-//  - An asterisk "*" matches anything except a slash. The character "?"
-//    matches any one character except "/".
+//  - The slash "/" is used as the directory separator.
 //  - Two consecutive asterisks ("**") in patterns match against many
 //    successive path components
+//  - Patterns that not start with a slash are considered relative and match
+//    the same as if they started with `**/`.
+//  - Patterns that end with a slash are considered directories and match any
+//    file or directory within that directory or their subdirectories. It acts
+//    as if it had a trailing "**".
+//  - An asterisk "*" matches anything except a slash. The character "?"
+//    matches any one character except "/".
 
 pub const PathComponent = struct {
     str: []const u21,
@@ -35,13 +39,25 @@ pub const PathComponent = struct {
 };
 
 pub const MatchPath = struct {
-    components: []PathComponent,
     allocator: Allocator,
+    components: []PathComponent,
+    isAbsolute: bool = false,
+    isDirectory: bool = false,
 
     pub fn init(allocator: Allocator, path: []const u21) !MatchPath {
+        if (path.len == 0) {
+            return MatchPath{
+                .components = &.{},
+                .allocator = allocator,
+            };
+        }
+        const is_absolute = path[0] == '/';
+        const is_directory = path.len > 0 and path[path.len - 1] == '/';
         const components = try splitPathComponents(allocator, path);
         return MatchPath{
             .components = components,
+            .isAbsolute = is_absolute,
+            .isDirectory = is_directory,
             .allocator = allocator,
         };
     }
@@ -71,7 +87,7 @@ pub const MatchPath = struct {
         // index in text.components
         var text_idx: usize = 0;
 
-        var is_double_star: bool = false;
+        var is_double_star: bool = !self.isAbsolute;
         // Iterate through both components
         while (pattern_idx < self.components.len and text_idx < text.components.len) {
             const pattern_comp = self.components[pattern_idx];
@@ -115,6 +131,9 @@ pub const MatchPath = struct {
                 text_idx += 1;
                 continue;
             }
+        }
+        if ((self.isDirectory) and (pattern_idx == self.components.len)) {
+            return true;
         }
         if ((pattern_idx < self.components.len) or (text_idx < text.components.len)) {
             // If we still have pattern or text components left, it means we didn't match all components
@@ -272,7 +291,22 @@ test "Split path components" {
     try std.testing.expectEqual(components.len, 5);
 }
 
-test "MatchPath: pattern == text" {
+test "MatchPath: absolute pattern == text" {
+    const allocator = std.testing.allocator;
+
+    const pattern = try MatchPath.initU8(allocator, "/ab/cd/ef.zig");
+    defer pattern.deinit();
+
+    const text = try MatchPath.initU8(allocator, "ab/cd/ef.zig");
+    defer text.deinit();
+    try std.testing.expect(pattern.isMatch(allocator, text));
+
+    const rel = try MatchPath.initU8(allocator, "foo/bar/ab/cd/ef.ghi");
+    defer rel.deinit();
+    try std.testing.expect(!pattern.isMatch(allocator, rel));
+}
+
+test "MatchPath: relative pattern == text" {
     const allocator = std.testing.allocator;
 
     const pattern = try MatchPath.initU8(allocator, "ab/cd/ef.zig");
@@ -282,9 +316,17 @@ test "MatchPath: pattern == text" {
     defer text.deinit();
     try std.testing.expect(pattern.isMatch(allocator, text));
 
+    const deep = try MatchPath.initU8(allocator, "foo/bar/ab/cd/ef.zig");
+    defer deep.deinit();
+    try std.testing.expect(pattern.isMatch(allocator, deep));
+
     const nope = try MatchPath.initU8(allocator, "ab/cd/ef.ghi");
     defer nope.deinit();
     try std.testing.expect(!pattern.isMatch(allocator, nope));
+
+    const nope2 = try MatchPath.initU8(allocator, "aaaaaab/cd/ef.ghi");
+    defer nope2.deinit();
+    try std.testing.expect(!pattern.isMatch(allocator, nope2));
 }
 
 test "MatchPath: leading **" {
