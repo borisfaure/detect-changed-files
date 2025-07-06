@@ -1,0 +1,60 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        zig-version: ['0.14.1']
+        runner-os: [ubuntu-latest, macos-latest, ubuntu-24.04-arm, macos-13]
+    runs-on: ${{ matrix.runner-os }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Zig
+      uses: mlugg/setup-zig@v2
+      with:
+        version: ${{ matrix.zig-version }}
+
+    - name: Verify Zig installation
+      run: zig version
+
+    - name: Run Zig tests
+      run: zig build test --summary all --verbose
+
+    - name: Build binaries
+      run: |
+        for optimization in Debug ReleaseSafe ReleaseFast ReleaseSmall; do
+          zig build -Doptimize=$optimization
+          mv zig-out/bin/detect_changed_files zig-out/bin/detect_changed_files-$optimization
+        done
+    - name: Upload last build binary
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: detect_changed_files-${{ matrix.runner-os }}-${{ github.sha }}
+        path: |
+          zig-out/bin/
+        retention-days: 7
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Zig
+      uses: mlugg/setup-zig@v2
+      with:
+        version: '0.14.1'
+
+    - name: Format check
+      run: zig fmt --check .
