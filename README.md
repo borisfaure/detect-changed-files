@@ -22,7 +22,7 @@ A fast, lightweight tool written in Zig that analyzes changed files from git dif
 ### Building from source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/borisfaure/detect-changed-files
 cd detect-changed-files
 zig build
 ```
@@ -107,6 +107,46 @@ git diff --name-only HEAD~1 HEAD | ./detect_changed_files changed-files.yaml
 # Check staged changes
 git diff --name-only --cached | ./detect_changed_files changed-files.yaml
 ```
+
+### Example 4: In a github Actions workflow
+
+In a GitHub Actions workflow, you can use this tool to conditionally run jobs
+based on changed files. Here's an example of how to set it up:
+
+The groups.yaml file might look like this to define a linter group for all
+Python files:
+```yaml
+linter:
+ - '*.py'
+```
+
+The GitHub Actions workflow file (`.github/workflows/detect-changes.yml`)
+could look like this:
+```yaml
+jobs:
+  detect-changes:
+    outputs:
+      run: ${{ steps.changed-groups.outputs.run }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+    - name: fetch branch
+      id: changed-groups
+      run: |
+        git fetch --depth=1 origin ${{ github.base_ref }}
+        curl -sL https://github.com/borisfaure/detect-changed-files/releases/download/v0.0.1/detect_changed_files-v0.0.1-ubuntu-latest-ReleaseFast -o detect_changed_files
+        chmod +x detect_changed_files
+        RUN=$(git diff --name-only ${BASE_SHA} | ./detect_changed_files .groups.yaml)
+        printf "run=%s" "$RUN" >> $GITHUB_OUTPUT
+
+  linter:
+    needs: detect-changes
+    if: fromJson(needs.detect-changes.outputs.run).linter
+    ...
+```
+
 
 
 ## Testing
