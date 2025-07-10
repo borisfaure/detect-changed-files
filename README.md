@@ -1,4 +1,4 @@
-[![CI](https://github.com/borisfaure/detect-changed-files/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/borisfaure/detect-changed-files/actions/workflows/build-and-test.yaml)
+[![CI](https://github.com/borisfaure/detect-changed-files/actions/workflows/build-and-test.yaml/badge.svg)](https://github.com/borisfaure/detect-changed-files/actions/workflows/build-and-test.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 # detect-changed-files
