@@ -53,6 +53,7 @@ fn printHelp() void {
         \\
         \\OPTIONS:
         \\    -h, --help       Print this help message
+        \\    -V, --version    Print version information
         \\
         \\DESCRIPTION:
         \\    This tool reads changed file paths from stdin (typically the output of
@@ -98,11 +99,15 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    // Check for help flags
+    // Check for help and version flags
     if (args.len == 2) {
         const first_arg = args[1];
         if (std.mem.eql(u8, first_arg, "-h") or std.mem.eql(u8, first_arg, "--help")) {
             printHelp();
+            return;
+        } else if (std.mem.eql(u8, first_arg, "-V") or std.mem.eql(u8, first_arg, "--version")) {
+            const stdout = std.io.getStdOut().writer();
+            stdout.print("{s}\n", .{build_options.version}) catch {};
             return;
         }
     } else if (args.len < 2) {
