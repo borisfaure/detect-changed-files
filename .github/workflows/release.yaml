@@ -32,8 +32,8 @@ jobs:
       run: |
         mkdir -p release
 
-        for optimization in Debug ReleaseSafe ReleaseFast ReleaseSmall; do
-          BINARY_NAME="detect_changed_files-${{ github.ref_name }}-${{ matrix.runner-os }}-${optimization}"
+        for optimization in Debug ReleaseSafe ReleaseSmall ReleaseFast; do
+          BINARY_NAME="detect_changed_files-${{ matrix.runner-os }}-${optimization}"
           # Copy the binary for the current optimization level
           mv "zig-out/bin/detect_changed_files-${optimization}" "release/$BINARY_NAME"
         done
