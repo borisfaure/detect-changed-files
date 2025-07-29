@@ -6,6 +6,7 @@ const config_zig = @import("config.zig");
 const Config = config_zig.ChangedFilesConfig;
 const match = @import("match.zig");
 const DiffFiles = @import("diff.zig").DiffFiles;
+const build_options = @import("build_options");
 
 pub const std_options = std.Options{
     // Set the log level to info
@@ -42,7 +43,7 @@ pub fn myLogFn(
 
 fn printHelp() void {
     const help_text =
-        \\detect-changed-files - Analyze changed files and categorize them based on patterns
+        \\detect-changed-files v{s} - Analyze changed files and categorize them based on patterns
         \\
         \\USAGE:
         \\    detect_changed_files [OPTIONS] <config.yaml>
@@ -86,7 +87,7 @@ fn printHelp() void {
         \\
     ;
     const stderr = std.io.getStdErr().writer();
-    stderr.print(help_text, .{}) catch {};
+    stderr.print(help_text, .{build_options.version}) catch {};
 }
 
 pub fn main() !void {
