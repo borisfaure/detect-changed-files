@@ -37,6 +37,7 @@ jobs:
           # Copy the binary for the current optimization level
           mv "zig-out/bin/detect_changed_files-${optimization}" "release/$BINARY_NAME"
         done
+        cp release/detect_changed_files-${{ matrix.runner-os }}-ReleaseSmall release/detect_changed_files-${{ matrix.runner-os }}
 
     - name: Upload build artifacts
       if: matrix.runner-os != 'windows-latest'
