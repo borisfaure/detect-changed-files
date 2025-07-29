@@ -136,7 +136,7 @@ jobs:
       id: changed-groups
       run: |
         git fetch --depth=1 origin ${{ github.base_ref }}
-        curl -sL https://github.com/borisfaure/detect-changed-files/releases/download/v0.0.1/detect_changed_files-v0.0.1-ubuntu-latest-ReleaseFast -o detect_changed_files
+        gh -R borisfaure/detect-changed-files release download -p detect_changed_files-ubuntu-latest -O detect_changed_files
         chmod +x detect_changed_files
         RUN=$(git diff --name-only ${BASE_SHA} | ./detect_changed_files .groups.yaml)
         printf "run=%s" "$RUN" >> $GITHUB_OUTPUT
