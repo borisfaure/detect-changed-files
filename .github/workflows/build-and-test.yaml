@@ -36,7 +36,7 @@ jobs:
           mv zig-out/bin/detect_changed_files zig-out/bin/detect_changed_files-$optimization
         done
     - name: Upload last build binary
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       if: always()
       with:
         name: detect_changed_files-${{ matrix.runner-os }}-${{ github.sha }}
