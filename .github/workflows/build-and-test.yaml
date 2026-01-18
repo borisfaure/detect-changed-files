@@ -10,7 +10,7 @@ jobs:
   test:
     strategy:
       matrix:
-        runner-os: [ubuntu-latest, macos-latest, ubuntu-24.04-arm, macos-13]
+        runner-os: [ubuntu-latest, macos-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner-os }}
 
     steps:
