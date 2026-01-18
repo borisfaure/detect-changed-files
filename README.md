@@ -200,6 +200,32 @@ The release build is already optimized for size with:
 - Size optimization (`opt-level = "z"`)
 - Single codegen unit for maximum optimization
 
+### Container build
+
+Build a minimal container image with Docker or Podman:
+
+```bash
+podman build . -t detect-changed-files:latest
+```
+
+Run the container by mounting your config file and piping the changed files to stdin:
+
+```bash
+cat tests/diff_small | podman run --rm -i --network none \
+  -v ./changed-files.conf:/config.conf:ro \
+  detect-changed-files:latest /detect-changed-files /config.conf
+```
+
+Or with git diff:
+
+```bash
+git diff --name-only | podman run --rm -i --network none \
+  -v ./changed-files.conf:/config.conf:ro \
+  detect-changed-files:latest /detect-changed-files /config.conf
+```
+
+The Dockerfile creates a statically-linked binary and packages it in a minimal scratch container for the smallest possible image size.
+
 ## Error Handling
 
 The tool will exit with an error code if:
