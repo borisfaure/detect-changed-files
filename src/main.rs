@@ -10,6 +10,7 @@ use std::process;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// Print help message
 fn print_help() {
     let help_text = format!(
         "detect-changed-files v{} - Analyze changed files and categorize them based on patterns

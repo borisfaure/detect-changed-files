@@ -1,5 +1,6 @@
 name: Test Action
 
+
 on:
   push:
     branches:
@@ -22,7 +23,7 @@ jobs:
 
       - name: Detect changed files
         id: detect
-        uses: borisfaure/detect-changed-files-action@v0.1.3
+        uses: borisfaure/detect-changed-files-action@94afd9ee9e5ed490b860903b07f03045fb1c2f23
         with:
           config-file: tests/changed-files.conf
 
