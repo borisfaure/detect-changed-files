@@ -115,44 +115,59 @@ git diff --name-only HEAD~1 HEAD | ./detect_changed_files changed-files.conf
 git diff --name-only --cached | ./detect_changed_files changed-files.conf
 ```
 
-### Example 4: In a github Actions workflow
+### Example 4: As a GitHub Action
 
-In a GitHub Actions workflow, you can use this tool to conditionally run jobs
-based on changed files. Here's an example of how to set it up:
+You can use this tool as a GitHub Action to conditionally run jobs based on changed files.
 
-The groups.conf file might look like this to define a linter group for all
-Python files:
+Create a configuration file (e.g., `.github/changed-files.conf`):
 ```ini
 [linter]
 *.py
+
+[tests]
+src/**
+tests/**
+
+[docs]
+docs/**
+README.md
 ```
 
-The GitHub Actions workflow file (`.github/workflows/detect-changes.yml`)
-could look like this:
+Then use it in your workflow (`.github/workflows/ci.yml`):
 ```yaml
 jobs:
   detect-changes:
+    runs-on: ubuntu-latest
     outputs:
-      run: ${{ steps.changed-groups.outputs.run }}
+      changes: ${{ steps.detect.outputs.changes }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
-    - name: fetch branch
-      id: changed-groups
-      run: |
-        git fetch --depth=1 origin ${{ github.base_ref }}
-        gh -R borisfaure/detect-changed-files release download -p detect_changed_files-ubuntu-latest -O detect_changed_files
-        chmod +x detect_changed_files
-        RUN=$(git diff --name-only ${BASE_SHA} | ./detect_changed_files .groups.conf)
-        printf "run=%s" "$RUN" >> $GITHUB_OUTPUT
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-  linter:
+      - name: Detect changed files
+        id: detect
+        uses: borisfaure/detect-changed-files-action@v0.0.3
+        with:
+          config-file: .github/changed-files.conf
+
+  run-linter:
     needs: detect-changes
-    if: fromJson(needs.detect-changes.outputs.run).linter
-    ...
+    if: fromJson(needs.detect-changes.outputs.changes).linter
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running linter..."
+
+  run-tests:
+    needs: detect-changes
+    if: fromJson(needs.detect-changes.outputs.changes).tests
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running tests..."
 ```
+
+The action automatically detects the base reference (PR base, push before SHA, or HEAD^) and outputs a JSON object with boolean values for each configured group.
 
 
 
