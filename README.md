@@ -148,7 +148,7 @@ jobs:
 
       - name: Detect changed files
         id: detect
-        uses: borisfaure/detect-changed-files-action@v0.1.2
+        uses: borisfaure/detect-changed-files-action@v0.1.3
         with:
           config-file: .github/changed-files.conf
 
