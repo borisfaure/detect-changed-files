@@ -12,6 +12,5 @@ LABEL org.opencontainers.image.description="Fast tool to analyze changed files a
 LABEL org.opencontainers.image.source="https://github.com/borisfaure/detect-changed-files"
 LABEL org.opencontainers.image.authors="Boris Faure"
 LABEL maintainer="Boris Faure"
-LABEL io.containers.capabilities="network=none"
 COPY --from=builder /app/target/release/detect-changed-files /detect-changed-files
 CMD ["/detect-changed-files"]
