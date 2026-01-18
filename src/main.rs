@@ -98,19 +98,18 @@ fn check_patterns(
 }
 
 fn generate_json(results: &HashMap<String, bool>) -> String {
-    let mut json = String::from("{\n");
+    let mut json = String::from("{");
 
     let mut entries: Vec<_> = results.iter().collect();
     entries.sort_by_key(|(k, _)| *k);
 
     for (i, (key, value)) in entries.iter().enumerate() {
         let value_str = if **value { "true" } else { "false" };
-        json.push_str(&format!("  \"{}\": {}", key, value_str));
+        json.push_str(&format!("\"{}\": {}", key, value_str));
 
         if i < entries.len() - 1 {
             json.push(',');
         }
-        json.push('\n');
     }
 
     json.push('}');
