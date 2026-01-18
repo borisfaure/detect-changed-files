@@ -1,0 +1,94 @@
+name: Test Action
+
+on:
+  push:
+    branches:
+      - 'test**'
+  pull_request:
+    branches:
+      - 'test**'
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    outputs:
+      changes: ${{ steps.detect.outputs.changes }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed files
+        id: detect
+        uses: borisfaure/detect-changed-files-action@v0.0.3
+        with:
+          config-file: tests/changed-files.conf
+
+      - name: Display results
+        run: |
+          echo "Detected changes:"
+          echo '${{ steps.detect.outputs.changes }}' | jq .
+
+  test-rust-group:
+    needs: test-action
+    if: fromJson(needs.test-action.outputs.changes).rust
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Rust files changed!"
+
+  test-zig-group:
+    needs: test-action
+    if: fromJson(needs.test-action.outputs.changes).zig
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Zig files changed!"
+
+  test-config-group:
+    needs: test-action
+    if: fromJson(needs.test-action.outputs.changes).config
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Config files changed!"
+
+  test-docker-group:
+    needs: test-action
+    if: fromJson(needs.test-action.outputs.changes).docker
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Docker files changed!"
+
+  test-ci-group:
+    needs: test-action
+    if: fromJson(needs.test-action.outputs.changes).ci
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "CI workflow files changed!"
+
+  validate-results:
+    needs: [test-action, test-rust-group, test-zig-group, test-config-group, test-docker-group, test-ci-group]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          echo "Changes detected: ${{ needs.test-action.outputs.changes }}"
+
+          RUST_CHANGED=$(echo '${{ needs.test-action.outputs.changes }}' | jq -r '.rust')
+          ZIG_CHANGED=$(echo '${{ needs.test-action.outputs.changes }}' | jq -r '.zig')
+          CONFIG_CHANGED=$(echo '${{ needs.test-action.outputs.changes }}' | jq -r '.config')
+          DOCKER_CHANGED=$(echo '${{ needs.test-action.outputs.changes }}' | jq -r '.docker')
+          CI_CHANGED=$(echo '${{ needs.test-action.outputs.changes }}' | jq -r '.ci')
+
+          RUST_JOB="${{ needs.test-rust-group.result }}"
+          ZIG_JOB="${{ needs.test-zig-group.result }}"
+          CONFIG_JOB="${{ needs.test-config-group.result }}"
+          DOCKER_JOB="${{ needs.test-docker-group.result }}"
+          CI_JOB="${{ needs.test-ci-group.result }}"
+
+          echo "Rust: changed=$RUST_CHANGED, job=$RUST_JOB"
+          echo "Zig: changed=$ZIG_CHANGED, job=$ZIG_JOB"
+          echo "Config: changed=$CONFIG_CHANGED, job=$CONFIG_JOB"
+          echo "Docker: changed=$DOCKER_CHANGED, job=$DOCKER_JOB"
+          echo "CI: changed=$CI_CHANGED, job=$CI_JOB"
