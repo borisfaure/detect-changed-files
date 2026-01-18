@@ -3,12 +3,12 @@
 
 # detect-changed-files
 
-A fast, lightweight tool written in Zig that analyzes changed files from git diffs and categorizes them based on configurable pattern matching rules. It's designed to be used in CI/CD pipelines to determine which parts of a codebase have been modified.
+A fast, lightweight tool written in Rust that analyzes changed files from git diffs and categorizes them based on configurable pattern matching rules. It's designed to be used in CI/CD pipelines to determine which parts of a codebase have been modified.
 
 ## Features
 
 - **Fast pattern matching**: Uses efficient glob-style pattern matching with support for `*`, `?`, and `**` wildcards
-- **YAML configuration**: Simple YAML-based configuration for defining file pattern groups
+- **simple configuration**: Simple configuration for defining file pattern groups
 - **JSON output**: Produces structured JSON output for easy integration with CI/CD systems
 - **Git integration**: Designed to work with `git diff --name-only` output
 - **Unicode support**: Full Unicode support for file paths and pattern matching
@@ -17,33 +17,31 @@ A fast, lightweight tool written in Zig that analyzes changed files from git dif
 
 ### Prerequisites
 
-- [Zig](https://ziglang.org/) 0.14.1 or later
+- [Rust](https://www.rust-lang.org/) 1.70 or later
 
 ### Building from source
 
 ```bash
 git clone https://github.com/borisfaure/detect-changed-files
 cd detect-changed-files
-zig build
+cargo build --release
 ```
 
-The executable will be built as `zig-out/bin/detect_changed_files`.
+The executable will be built as `target/release/detect_changed_files`.
 
 ## Usage
 
 ### Basic Usage
 
-The tool takes a YAML configuration file as its first argument and reads changed file paths from stdin (typically the output of `git diff --name-only`):
+The tool takes a configuration file as its first argument and reads changed file paths from stdin (typically the output of `git diff --name-only`):
 
 ```bash
-git diff --name-only | ./detect_changed_files config.yaml
+git diff --name-only | ./detect_changed_files config.conf
 ```
 
 ### Configuration File Format
 
-The configuration file is a YAML file where each key represents a group name,
-and the value is a list of file patterns. Patterns are similar to ones used in
-.gitignore files, with some limitations.
+The configuration file uses a simple INI-like format with section headers and pattern lists. Each section name represents a group name, and patterns are listed one per line under each section. Patterns are similar to ones used in .gitignore files.
 
 #### Pattern Syntax
 
@@ -55,22 +53,31 @@ The tool supports the following pattern matching features:
 - `/` - Directory separator
 
 
+#### Configuration Format Rules
+
+- Section headers are defined using square brackets: `[section-name]`
+- Patterns are listed one per line under each section
+- Empty lines are ignored
+- Comments start with `#` or `;`
+- Section names must be unique
+
 #### Example Configuration
 
-```yaml
-# Example: changed-files.yaml
-github-workflows:
-  - .github/workflows/
+```ini
+# Example: changed-files.conf
 
-c:
-  - '*.c'
-  - '*.h'
-  - 'meson.build'
-  - /meson_options.txt
+[github-workflows]
+.github/workflows/**
 
-doc:
-  - 'docs/**'
-  - 'README.md'
+[c]
+*.c
+*.h
+meson.build
+/meson_options.txt
+
+[doc]
+docs/**
+README.md
 ```
 
 ### Output Format
@@ -91,21 +98,21 @@ The tool outputs JSON to stdout with boolean values indicating which groups have
 
 ```bash
 # Check which groups are affected by changes
-git diff --name-only | ./detect_changed_files changed-files.yaml
+git diff --name-only | ./detect_changed_files changed-files.conf
 ```
 
 ### Example 2: Using with a specific commit range
 
 ```bash
 # Check changes between two commits
-git diff --name-only HEAD~1 HEAD | ./detect_changed_files changed-files.yaml
+git diff --name-only HEAD~1 HEAD | ./detect_changed_files changed-files.conf
 ```
 
 ### Example 3: Using with staged changes
 
 ```bash
 # Check staged changes
-git diff --name-only --cached | ./detect_changed_files changed-files.yaml
+git diff --name-only --cached | ./detect_changed_files changed-files.conf
 ```
 
 ### Example 4: In a github Actions workflow
@@ -113,11 +120,11 @@ git diff --name-only --cached | ./detect_changed_files changed-files.yaml
 In a GitHub Actions workflow, you can use this tool to conditionally run jobs
 based on changed files. Here's an example of how to set it up:
 
-The groups.yaml file might look like this to define a linter group for all
+The groups.conf file might look like this to define a linter group for all
 Python files:
-```yaml
-linter:
- - '*.py'
+```ini
+[linter]
+*.py
 ```
 
 The GitHub Actions workflow file (`.github/workflows/detect-changes.yml`)
@@ -138,7 +145,7 @@ jobs:
         git fetch --depth=1 origin ${{ github.base_ref }}
         gh -R borisfaure/detect-changed-files release download -p detect_changed_files-ubuntu-latest -O detect_changed_files
         chmod +x detect_changed_files
-        RUN=$(git diff --name-only ${BASE_SHA} | ./detect_changed_files .groups.yaml)
+        RUN=$(git diff --name-only ${BASE_SHA} | ./detect_changed_files .groups.conf)
         printf "run=%s" "$RUN" >> $GITHUB_OUTPUT
 
   linter:
@@ -154,7 +161,7 @@ jobs:
 Run the test suite:
 
 ```bash
-zig build test
+cargo test
 ```
 
 ## Building and Running
@@ -162,17 +169,36 @@ zig build test
 ### Development build
 
 ```bash
-zig build
-git diff --name-only | ./zig-out/bin/detect_changed_files changed-files.yaml
+cargo build
+git diff --name-only | ./target/debug/detect_changed_files changed-files.conf
 ```
 
 ### Release build
 
 ```bash
-zig build -Doptimize=ReleaseFast
-git diff --name-only | ./zig-out/bin/detect_changed_files changed-files.yaml
+cargo build --release
+git diff --name-only | ./target/release/detect_changed_files changed-files.conf
 ```
 
+### Static build
+
+For a fully static binary that can run on any Linux system without dependencies:
+
+```bash
+# Install the musl target (one-time setup)
+rustup target add x86_64-unknown-linux-musl
+
+# Build a static binary
+cargo build --release --target x86_64-unknown-linux-musl
+```
+
+The static binary will be at `target/x86_64-unknown-linux-musl/release/detect_changed_files`.
+
+The release build is already optimized for size with:
+- Symbol stripping
+- Link-time optimization (LTO)
+- Size optimization (`opt-level = "z"`)
+- Single codegen unit for maximum optimization
 
 ## Error Handling
 
@@ -180,7 +206,7 @@ The tool will exit with an error code if:
 
 - No configuration file path is provided
 - The configuration file cannot be read or parsed
-- The YAML format is invalid
+- The configuration format is invalid (e.g., duplicate sections, items before sections)
 - Memory allocation fails
 
 ## Performance
