@@ -1,5 +1,5 @@
-use std::io::{self, BufRead};
 use crate::matching::MatchPath;
+use std::io::{self, BufRead};
 
 /// Represents a list of changed files from git diff
 pub struct DiffFiles {
